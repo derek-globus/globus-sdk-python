@@ -1,22 +1,15 @@
 #!/usr/bin/env python
 
 import argparse
-import os
 import sys
 
 import globus_sdk
-from globus_sdk.tokenstorage import SimpleJSONFileAdapter
 
-MY_FILE_ADAPTER = SimpleJSONFileAdapter(os.path.expanduser("~/.sdk-manage-flow.json"))
-
-SCOPES = [globus_sdk.FlowsClient.scopes.manage_flows]
-RESOURCE_SERVER = globus_sdk.FlowsClient.resource_server
-
-# tutorial client ID
-# we recommend replacing this with your own client for any production use-cases
-CLIENT_ID = "61338d24-54d5-408f-a10d-66c06b59f6d2"
-
-NATIVE_CLIENT = globus_sdk.NativeAppAuthClient(CLIENT_ID)
+# Tutorial client ID - replace this with your own native client
+# Alternatively, run this script with the environment variable:
+#   GLOBUS_CLIENT_ID=61338d24-54d5-408f-a10d-66c06b59f6d2
+NATIVE_CLIENT_ID = "61338d24-54d5-408f-a10d-66c06b59f6d2"
+session = globus_sdk.GlobusUserSession("my-simple-flow", client_id=NATIVE_CLIENT_ID)
 
 
 def main(action, flow_id, title):
@@ -33,6 +26,11 @@ def main(action, flow_id, title):
             delete_flow(flow_id)
         elif action == "list":
             list_flows()
+        elif action == "run":
+            if flow_id is None:
+                print("[ERROR] run requires --flow-id")
+                sys.exit(1)
+            run_flow(flow_id)
         else:
             raise NotImplementedError()
     except globus_sdk.FlowsAPIError as e:
@@ -42,7 +40,7 @@ def main(action, flow_id, title):
 
 
 def create_flow(title):
-    flows_client = get_flows_client()
+    flows_client = session.get_client(globus_sdk.FlowsClient)
     print(
         flows_client.create_flow(
             title=title,
@@ -66,57 +64,26 @@ def create_flow(title):
 
 
 def delete_flow(flow_id):
-    flows_client = get_flows_client()
+    flows_client = session.get_client(globus_sdk.FlowsClient)
     print(flows_client.delete_flow(flow_id))
 
 
 def list_flows():
-    flows_client = get_flows_client()
+    flows_client = session.get_client(globus_sdk.FlowsClient)
     for flow in flows_client.list_flows(filter_role="flow_owner"):
         print(f"title: {flow['title']}")
         print(f"id: {flow['id']}")
         print()
 
 
-def get_flows_client():
-    return globus_sdk.FlowsClient(authorizer=get_authorizer())
-
-
-def get_authorizer():
-    # try to load the tokens from the file, possibly returning None
-    if MY_FILE_ADAPTER.file_exists():
-        tokens = MY_FILE_ADAPTER.get_token_data(RESOURCE_SERVER)
-    else:
-        tokens = None
-
-    if tokens is None:
-        # do a login flow, getting back initial tokens
-        response = do_login_flow()
-        # now store the tokens and pull out the correct token
-        MY_FILE_ADAPTER.store(response)
-        tokens = response.by_resource_server[RESOURCE_SERVER]
-
-    return globus_sdk.RefreshTokenAuthorizer(
-        tokens["refresh_token"],
-        NATIVE_CLIENT,
-        access_token=tokens["access_token"],
-        expires_at=tokens["expires_at_seconds"],
-        on_refresh=MY_FILE_ADAPTER.on_refresh,
-    )
-
-
-def do_login_flow():
-    NATIVE_CLIENT.oauth2_start_flow(requested_scopes=SCOPES, refresh_tokens=True)
-    authorize_url = NATIVE_CLIENT.oauth2_get_authorize_url()
-    print(f"Please go to this URL and login:\n\n{authorize_url}\n")
-    auth_code = input("Please enter the code here: ").strip()
-    tokens = NATIVE_CLIENT.oauth2_exchange_code_for_tokens(auth_code)
-    return tokens
+def run_flow(flow_id):
+    flows_client = session.get_client(globus_sdk.SpecificFlowClient, flow_id)
+    flows_client.run_flow({})
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["create", "delete", "list"])
+    parser.add_argument("action", choices=["create", "delete", "list", "run"])
     parser.add_argument("-f", "--flow-id", help="Flow ID for delete")
     parser.add_argument("-t", "--title", help="Name for create")
     args = parser.parse_args()
