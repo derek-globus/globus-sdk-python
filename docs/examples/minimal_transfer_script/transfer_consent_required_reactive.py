@@ -39,7 +39,7 @@ def main(src, dst):
 
         # finally, try the submission a second time, this time with no error
         # handling
-        do_submit(transfer_client)
+        do_submit(transfer_client, task_data)
 
 
 def login_and_get_transfer_client(*, scopes=TransferScopes.all):
