@@ -1,16 +1,17 @@
 import argparse
 
 import globus_sdk
-from globus_sdk.scopes import TransferScopes
 
 # Tutorial client ID - replace this with your own native client
-CLIENT_ID = "61338d24-54d5-408f-a10d-66c06b59f6d2"
-auth_client = globus_sdk.NativeAppAuthClient(CLIENT_ID)
+# Alternatively, run this script with the environment variable:
+#   GLOBUS_CLIENT_ID=61338d24-54d5-408f-a10d-66c06b59f6d2
+NATIVE_CLIENT_ID = "61338d24-54d5-408f-a10d-66c06b59f6d2"
+session = globus_sdk.GlobusUserSession("my-simple-transfer", client_id=NATIVE_CLIENT_ID)
 
 
 def main(src, dst):
     # get an initial client to try with, which requires a login flow
-    transfer_client = login_and_get_transfer_client()
+    transfer_client = session.get_client(globus_sdk.TransferClient)
 
     # create a Transfer task consisting of one or more items
     task_data = globus_sdk.TransferData(source_endpoint=src, destination_endpoint=dst)
@@ -33,35 +34,19 @@ def main(src, dst):
             "Encountered a ConsentRequired error.\n"
             "You must login a second time to grant consents.\n\n"
         )
-        transfer_client = login_and_get_transfer_client(
-            scopes=err.info.consent_required.required_scopes
+
+        # Note that this call will initiate a new login flow (prompting for the
+        # newly discovered scopes)
+        transfer_client = session.get_client(
+            globus_sdk.TransferClient,
+            additional_auth_requirements=globus_sdk.AuthRequirements(
+                scopes=err.info.consent_required.required_scopes
+            ),
         )
 
         # finally, try the submission a second time, this time with no error
         # handling
-        do_submit(transfer_client)
-
-
-def login_and_get_transfer_client(*, scopes=TransferScopes.all):
-    """
-    we will need to do the login flow potentially twice, so define it as a
-    function
-
-    we default to using the Transfer "all" scope, but it is settable here
-    look at the ConsentRequired handler below for how this is used
-    """
-    auth_client.oauth2_start_flow(requested_scopes=scopes)
-    authorize_url = auth_client.oauth2_get_authorize_url()
-    print(f"Please go to this URL and login:\n\n{authorize_url}\n")
-
-    auth_code = input("Please enter the code here: ").strip()
-    tokens = auth_client.oauth2_exchange_code_for_tokens(auth_code)
-    transfer_tokens = tokens.by_resource_server["transfer.api.globus.org"]
-
-    # return the TransferClient object, as the result of doing a login
-    return globus_sdk.TransferClient(
-        authorizer=globus_sdk.AccessTokenAuthorizer(transfer_tokens["access_token"])
-    )
+        do_submit(transfer_client, task_data)
 
 
 def do_submit(client, task_data):
