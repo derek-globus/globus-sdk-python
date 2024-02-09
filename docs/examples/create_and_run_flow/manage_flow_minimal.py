@@ -9,7 +9,7 @@ import globus_sdk
 # Alternatively, run this script with the environment variable:
 #   GLOBUS_CLIENT_ID=61338d24-54d5-408f-a10d-66c06b59f6d2
 NATIVE_CLIENT_ID = "61338d24-54d5-408f-a10d-66c06b59f6d2"
-session = globus_sdk.GlobusUserSession("my-simple-flow", client_id=NATIVE_CLIENT_ID)
+session = globus_sdk.UserProxySession("my-simple-flow", client_id=NATIVE_CLIENT_ID)
 
 
 def main(action, flow_id, title):
