@@ -11,7 +11,9 @@ session = globus_sdk.UserProxySession("my-simple-transfer", client_id=NATIVE_CLI
 
 def main(src, dst):
     # get an initial client to try with, which requires a login flow
-    transfer_client = session.get_client(globus_sdk.TransferClient)
+    transfer_client = globus_sdk.TransferClient(session=session)
+
+    session.run_login_flow()
 
     # create a Transfer task consisting of one or more items
     task_data = globus_sdk.TransferData(source_endpoint=src, destination_endpoint=dst)
