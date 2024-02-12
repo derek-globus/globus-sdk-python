@@ -10,12 +10,15 @@ session = globus_sdk.UserProxySession("my-simple-transfer", client_id=NATIVE_CLI
 
 
 def main(src, dst):
-    # get an initial client to try with, which requires a login flow
+    # Create a transfer client
     transfer_client = globus_sdk.TransferClient(session=session)
 
+    # Prompt your user to login with registered auth requirements (this is just
+    # transfer's default tranfser:all scope which was registered when the TransferClient
+    # was created).
     session.run_login_flow()
 
-    # create a Transfer task consisting of one or more items
+    # Create a Transfer task consisting of one or more items
     task_data = globus_sdk.TransferData(source_endpoint=src, destination_endpoint=dst)
     task_data.add_item(
         "/share/godata/file1.txt",  # source
@@ -25,29 +28,25 @@ def main(src, dst):
     try:
         do_submit(transfer_client, task_data)
     except globus_sdk.TransferAPIError as err:
-        # if the error is something other than consent_required, reraise it,
+        # If the error is something other than consent_required, reraise it,
         # exiting the script with an error message
         if not err.info.consent_required:
             raise
 
-        # we now know that the error is a ConsentRequired
-        # print an explanatory message and do the login flow again
+        # We now know that the error is a ConsentRequired
+        # Print an explanatory message and do the login flow again
         print(
             "Encountered a ConsentRequired error.\n"
             "You must login a second time to grant consents.\n\n"
         )
 
-        # Note that this call will initiate a new login flow (prompting for the
-        # newly discovered scopes)
-        session.add_auth_requirement(
-            transfer_client.resource_server,
-            globus_sdk.AuthRequirements(
-                scopes=err.info.consent_required.required_scopes
-            ),
+        # Attach the received required scopes to transfer's bound session requirements.
+        transfer_client.bound_session.add_requirement(
+            scopes=err.info.consent_required.required_scopes,
         )
 
-        # finally, try the submission a second time, this time with no error
-        # handling
+        # Finally, try the submission a second time, (this will prompt for login) as
+        # a part of the call
         do_submit(transfer_client, task_data)
 
 
