@@ -40,7 +40,7 @@ def main(action, flow_id, title):
 
 
 def create_flow(title):
-    flows_client = session.get_client(globus_sdk.FlowsClient)
+    flows_client = globus_sdk.FlowsClient(session=session)
     print(
         flows_client.create_flow(
             title=title,
@@ -64,12 +64,12 @@ def create_flow(title):
 
 
 def delete_flow(flow_id):
-    flows_client = session.get_client(globus_sdk.FlowsClient)
+    flows_client = globus_sdk.FlowsClient(session=session)
     print(flows_client.delete_flow(flow_id))
 
 
 def list_flows():
-    flows_client = session.get_client(globus_sdk.FlowsClient)
+    flows_client = globus_sdk.FlowsClient(session=session)
     for flow in flows_client.list_flows(filter_role="flow_owner"):
         print(f"title: {flow['title']}")
         print(f"id: {flow['id']}")
@@ -77,7 +77,7 @@ def list_flows():
 
 
 def run_flow(flow_id):
-    flows_client = session.get_client(globus_sdk.SpecificFlowClient, flow_id)
+    flows_client = globus_sdk.SpecificFlowClient(flow_id, session=session)
     flows_client.run_flow({})
 
 
