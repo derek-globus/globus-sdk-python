@@ -10,18 +10,20 @@ session = globus_sdk.UserProxySession("my-simple-transfer", client_id=NATIVE_CLI
 
 
 def main(src, dst):
-    # get an initial client to try with, which requires a login flow
+    # Create a transfer client.
     transfer_client = globus_sdk.TransferClient(session=session)
 
-    session.run_login_flow()
-
-    # create a Transfer task consisting of one or more items
+    # Create a transfer task consisting of one or more items.
     task_data = globus_sdk.TransferData(source_endpoint=src, destination_endpoint=dst)
     task_data.add_item(
         "/share/godata/file1.txt",  # source
         "/~/example-transfer-script-destination.txt",  # dest
     )
 
+    # Submit the transfer.
+    # This implicitly prompts the user to log in, caching tokens for subsequent runs.
+    # If the request raises a consent required error, it will prompt the user for
+    #   additional consent then retry the request.
     task_doc = transfer_client.submit_transfer(task_data)
     task_id = task_doc["task_id"]
     print(f"submitted transfer, task_id={task_id}")
