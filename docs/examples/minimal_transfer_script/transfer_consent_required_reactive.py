@@ -10,15 +10,10 @@ session = globus_sdk.UserProxySession("my-simple-transfer", client_id=NATIVE_CLI
 
 
 def main(src, dst):
-    # Create a transfer client
+    # Create a transfer client.
     transfer_client = globus_sdk.TransferClient(session=session)
 
-    # Prompt your user to login with registered auth requirements (this is just
-    # transfer's default tranfser:all scope which was registered when the TransferClient
-    # was created).
-    session.run_login_flow()
-
-    # Create a Transfer task consisting of one or more items
+    # Create a transfer task consisting of one or more items.
     task_data = globus_sdk.TransferData(source_endpoint=src, destination_endpoint=dst)
     task_data.add_item(
         "/share/godata/file1.txt",  # source
@@ -26,6 +21,9 @@ def main(src, dst):
     )
 
     try:
+        # Submit the transfer.
+        # This will implicitly prompt the user to log in, caching tokens for subsequent
+        # runs.
         do_submit(transfer_client, task_data)
     except globus_sdk.TransferAPIError as err:
         # If the error is something other than consent_required, reraise it,
@@ -45,15 +43,14 @@ def main(src, dst):
             scopes=err.info.consent_required.required_scopes,
         )
 
-        # Finally, try the submission a second time, (this will prompt for login) as
-        # a part of the call
+        # Finally, try the submission a second time.
+        # This will implicitly prompt the user to log in again prior to the call due to
+        # the newly added scope requirements.
         do_submit(transfer_client, task_data)
 
 
 def do_submit(client, task_data):
-    """
-    define the submission step -- we will use it twice below
-    """
+    """Submit a transfer request (defined as a distinct function for reuse)."""
     task_doc = client.submit_transfer(task_data)
     task_id = task_doc["task_id"]
     print(f"submitted transfer, task_id={task_id}")
