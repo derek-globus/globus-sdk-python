@@ -9,10 +9,10 @@ auth_client = globus_sdk.NativeAppAuthClient(CLIENT_ID)
 
 
 def main(src, dst):
-    # get an initial client to try with, which requires a login flow
+    # Get an initial client to try with. This requires a login flow.
     transfer_client = login_and_get_transfer_client()
 
-    # create a Transfer task consisting of one or more items
+    # Create a transfer task consisting of one or more items.
     task_data = globus_sdk.TransferData(source_endpoint=src, destination_endpoint=dst)
     task_data.add_item(
         "/share/godata/file1.txt",  # source
@@ -22,13 +22,13 @@ def main(src, dst):
     try:
         do_submit(transfer_client, task_data)
     except globus_sdk.TransferAPIError as err:
-        # if the error is something other than consent_required, reraise it,
+        # If the error is something other than consent_required, reraise it,
         # exiting the script with an error message
         if not err.info.consent_required:
             raise
 
-        # we now know that the error is a ConsentRequired
-        # print an explanatory message and do the login flow again
+        # We now know that the error is a ConsentRequired
+        # Print an explanatory message and do the login flow again
         print(
             "Encountered a ConsentRequired error.\n"
             "You must login a second time to grant consents.\n\n"
@@ -37,8 +37,7 @@ def main(src, dst):
             scopes=err.info.consent_required.required_scopes
         )
 
-        # finally, try the submission a second time, this time with no error
-        # handling
+        # Finally, try the submission a second time, this time with no error handling
         do_submit(transfer_client, task_data)
 
 
@@ -65,9 +64,7 @@ def login_and_get_transfer_client(*, scopes=TransferScopes.all):
 
 
 def do_submit(client, task_data):
-    """
-    define the submission step -- we will use it twice below
-    """
+    """Submit a transfer request (defined as a distinct function for reuse)."""
     task_doc = client.submit_transfer(task_data)
     task_id = task_doc["task_id"]
     print(f"submitted transfer, task_id={task_id}")
