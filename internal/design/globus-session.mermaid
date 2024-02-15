@@ -1,56 +1,70 @@
 
 classDiagram
     class BaseClient {
-        - authorizer_provider: AuthorizerProvider
-        $ auth_requirements(constructor_params) AuthRequirements
-        $ resource_server(constructor_params) str
+        + bound_session: BoundSession
+        __init__(..., *, session: GlobusSession)
+        default_auth_requirements() AuthRequirements
+        resource_server() str
     }
 
-    BaseClient "has 1" *-- GlobusAuthorizerProvider
+    BaseClient "has 1" *-- BoundSession
     BaseClient "provides" -- AuthRequirements
 
-    class GlobusSession {
-        + get_client(client_class: Type~BaseClient~, *args, additional_requirements: AuthRequirements, **kwargs) BaseClient
-        + get_authorizer_provider() GlobusAuthorizerProvider
+    class RequestsTransport {
+        def request(..., session: BoundSession) requests.Response
     }
-    GlobusSession "creates" -- BaseClient
-    GlobusSession "creates" -- GlobusAuthorizerProvider
-    GlobusSession "accepts" -- AuthRequirements
+    RequestsTransport "accepts" -- BoundSession
 
-    class ClientSession {
+    class BoundSession {
+        - resource_server: str
+        - session: GlobusSession
+        + add_requirements(requirements: AuthRequirements)
+        + get_authorizer() GlobusAuthorizer
+    }
+    BoundSession "has 1" *-- GlobusSession
+    BoundSession "provides" -- GlobusAuthorizer
+
+    class GlobusSession {
+        - requirements_registry: RequirementsRegistry
+        - authorizer_cache: AuthorizerRegistry
+        + add_requirement(resource_server: str, requirements: AuthRequirements)
+        * get_authorizer(resource_server: str) GlobusAuthorizer
+    }
+    GlobusSession "creates" -- GlobusAuthorizer
+    GlobusSession "has 1" *-- RequirementsRegistry
+    GlobusSession "has 1" *-- AuthorizerRegistry
+
+    class GlobusClientSession {
         + app_name: str
         - client: ConfidentialAppAuthClient
-        - token_cache StorageAdapter
-    }
-    ClientSession ..|> GlobusSession
-
-    class UserProxySession {
-        + app_name: str
-        - client: AuthLoginClient
-    }
-    UserProxySession ..|> GlobusSession
-
-    class GlobusAuthorizerProvider {
-        + resource_server: str
-        + requirements: AuthRequirements
-        + get_authorizer() Authorizer
-        + update_requirements(requirements: AuthRequirements)
-    }
-
-    GlobusAuthorizerProvider "has 1" *-- AuthRequirements
-
-    class ClientAuthorizerProvider {
-        - client ConfidentialAppAuthClient
         - token_store StorageAdapter
     }
-    ClientAuthorizerProvider ..|> GlobusAuthorizerProvider
+    GlobusClientSession ..|> GlobusSession
 
-    class UserProxyAuthorizerProvider {
+    class GlobusUserSession {
+        + app_name: str
+        - client: AuthLoginClient
         - login_flow_manager LoginFlowManager
-        - token_cache StorageAdapter
+        - token_store StorageAdapter
     }
-    UserProxyAuthorizerProvider ..|> GlobusAuthorizerProvider
-    UserProxyAuthorizerProvider "has 1" *-- LoginFlowManager
+    GlobusUserSession ..|> GlobusSession
+    GlobusUserSession "has 1" *-- LoginFlowManager
+
+    class RequirementsRegistry {
+        - the_registry: dict~str~AuthRequirements~~
+        + register_requirements(resource_server: str, requirements: AuthRequirements)
+        + get_requirements(resource_server: str) AuthRequirements
+    }
+
+    RequirementsRegistry "has n" *-- AuthRequirements
+
+    class AuthorizerRegistry {
+        - the_registry: dict~str~GlobusAuthorizer~~
+        + register_authorizer(resource_server: str, authorizer: GlobusAuthorizer)
+        + get_authorizer(resource_server: str) GlobusAuthorizer
+    }
+
+    AuthorizerRegistry "has n" *-- GlobusAuthorizer
 
     class AuthRequirements {
         + required_scopes: list~Scope~
