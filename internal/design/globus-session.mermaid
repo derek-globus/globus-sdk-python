@@ -1,82 +1,104 @@
 
 classDiagram
     class BaseClient {
-        + bound_session: BoundSession
-        __init__(..., *, session: GlobusSession)
-        default_auth_requirements() AuthRequirements
+        + bound_app: BoundApp
+        __init__(..., *, app: GlobusApp)
+        auth_requirements(access_level: AccessLevel) AuthRequirements
         resource_server() str
     }
 
-    BaseClient "has 1" *-- BoundSession
+    BaseClient "has 1" *-- BoundApp
+    BaseClient "accepts" -- AccessLevel
     BaseClient "provides" -- AuthRequirements
 
-    class RequestsTransport {
-        def request(..., session: BoundSession) requests.Response
+    class AccessLevel {
+        <<enumeration>>
+        ALL
+        MANAGE
+        READ_WRITE
+        READ
     }
-    RequestsTransport "accepts" -- BoundSession
 
-    class BoundSession {
+    class RequestsTransport {
+        def request(..., app: BoundApp) requests.Response
+    }
+    RequestsTransport "accepts" -- BoundApp
+
+    class BoundApp {
         - resource_server: str
-        - session: GlobusSession
+        - app: GlobusApp
         + add_requirements(requirements: AuthRequirements)
+        + add_scope_requirements(required_scopes: list~Scope | str~)
+        + add_session_requirements(session_requirements: SessionRequirements)
+        + remove_requirements(requirements: AuthRequirements)
+        + remove_scope_requirements(required_scopes: list~Scope | str~)
+        + remove_session_requirements(session_requirements: SessionRequirements)
         + get_authorizer() GlobusAuthorizer
     }
-    BoundSession "has 1" *-- GlobusSession
-    BoundSession "provides" -- GlobusAuthorizer
+    BoundApp "has 1" *-- GlobusApp
+    BoundApp "provides" -- GlobusAuthorizer
 
-    class GlobusSession {
-        - requirements_registry: RequirementsRegistry
-        - authorizer_cache: AuthorizerRegistry
-        + add_requirement(resource_server: str, requirements: AuthRequirements)
+    class GlobusApp {
+        - session_requirements: SessionRequirements
+        - authorizer_factory: AuthorizerFactory
+        + add_requirements(resource_server: str, requirements: AuthRequirements)
+        + add_scope_requirements(resource_server: str, required_scopes: list~Scope | str~)
+        + add_session_requirements(session_requirements: SessionRequirements)
+        + remove_requirements(resource_server: str, requirements: AuthRequirements)
+        + remove_scope_requirements(resource_server: str, required_scopes: list~Scope | str~)
+        + remove_session_requirements(session_requirements: SessionRequirements)
+        + update_tokens(tokens: dict~str, AuthToken~)
+        + run_login_flow()
         * get_authorizer(resource_server: str) GlobusAuthorizer
     }
-    GlobusSession "creates" -- GlobusAuthorizer
-    GlobusSession "has 1" *-- RequirementsRegistry
-    GlobusSession "has 1" *-- AuthorizerRegistry
+    GlobusApp "creates" -- GlobusAuthorizer
+    GlobusApp "has 1" *-- AuthorizerFactory
+    GlobusApp "has 1" *-- SessionRequirements~TypedDict~
 
-    class GlobusClientSession {
+    class ConfidentialClientApp {
         + app_name: str
         - client: ConfidentialAppAuthClient
-        - token_store StorageAdapter
     }
-    GlobusClientSession ..|> GlobusSession
+    ConfidentialClientApp ..|> GlobusApp
 
-    class GlobusUserSession {
+    class UserApp {
         + app_name: str
         - client: AuthLoginClient
         - login_flow_manager LoginFlowManager
-        - token_store StorageAdapter
     }
-    GlobusUserSession ..|> GlobusSession
-    GlobusUserSession "has 1" *-- LoginFlowManager
+    UserApp ..|> GlobusApp
+    UserApp "has 1" *-- LoginFlowManager
 
-    class RequirementsRegistry {
-        - the_registry: dict~str~AuthRequirements~~
-        + register_requirements(resource_server: str, requirements: AuthRequirements)
-        + get_requirements(resource_server: str) AuthRequirements
-    }
-
-    RequirementsRegistry "has n" *-- AuthRequirements
-
-    class AuthorizerRegistry {
-        - the_registry: dict~str~GlobusAuthorizer~~
-        + register_authorizer(resource_server: str, authorizer: GlobusAuthorizer)
-        + get_authorizer(resource_server: str) GlobusAuthorizer
-    }
-
-    AuthorizerRegistry "has n" *-- GlobusAuthorizer
-
-    class AuthRequirements {
-        + required_scopes: list~Scope~
+    class SessionRequirements~TypedDict~ {
         + session_required_identities: list~str~
         + session_required_policies: list~str~
         + session_required_single_domain: list~str~
         + session_required_mfa: bool
+        + prompt: str
     }
+
+    class AuthorizerFactory {
+        - scope_registry: dict~str, list~Scope~~
+        - authorizer_cache: dict~str, GlobusAuthorizer~
+        - token_store: StorageAdapter
+        + token_update_required(resource_server: str) bool
+        + required_scopes() dict~str, list~Scope~~
+        + update_tokens(tokens: dict~str, AuthToken~)
+        + get_authorizer(resource_server: str) GlobusAuthorizer
+    }
+
+    AuthorizerFactory "has n" *-- GlobusAuthorizer
+
+    class AuthRequirements {
+        + required_scopes: list~Scope~
+        + session_requirments: SessionRequirements
+    }
+
+    AuthRequirements "has 0 | 1" *-- SessionRequirements
 
     class LoginFlowManager {
         - client AuthLoginClient
-        + run_login_flow(resource_server: str, requirements: AuthRequirements) AuthToken
+        + run_login_flow(auth_requirements: AuthRequirements) dict~str AuthToken~
     }
 
     LoginFlowManager "accepts" -- AuthRequirements

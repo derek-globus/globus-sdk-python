@@ -275,6 +275,9 @@ class BaseClient:
 
         # make the request
         log.debug("request will hit URL: %s", url)
+
+        authorizer = self.authorizer or self.bound_app.get_authorizer()
+
         r = self.transport.request(
             method=method,
             url=url,
@@ -282,7 +285,7 @@ class BaseClient:
             query_params=query_params,
             headers=rheaders,
             encoding=encoding,
-            authorizer=self.authorizer,
+            authorizer=authorizer,
             allow_redirects=allow_redirects,
             stream=stream,
         )
