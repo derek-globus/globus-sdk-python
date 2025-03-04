@@ -11,6 +11,8 @@ accuracy or completeness.
 As we encounter bugs and missing features, we will update glocal to address them but
 some discrepancies may be intentionally omitted. The goal isn't to replace globus
 services, just simulate their APIs.
+
+Suggestion from stgephen: talk to ben blazik about this concept
 """
 
 from .decorator import mock_globus

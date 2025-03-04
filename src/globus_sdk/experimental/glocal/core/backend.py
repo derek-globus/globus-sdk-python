@@ -2,36 +2,26 @@ from __future__ import annotations
 
 import functools
 import inspect
+import json
 import re
 
 import typing as t
 import urllib.parse
 from io import BufferedReader
+import requests
 
-if t.TYPE_CHECKING:
-    from requests import PreparedRequest, Response
+from .route import RouteMetadata, AnnotatedHandler, RouteResp, api_route
 
-    _RouteRespBody = t.Union[
-        str, BaseException, Response, BufferedReader, bytes, None
-    ]
-    RouteResp = t.Union[
-        Exception,
-        # (status_code, headers, body)
-        t.Tuple[int, t.Mapping[str, str], _RouteRespBody],
-    ]
 
-    RouteHandler = t.Callable[..., RouteResp]
-    CallbackFunction = t.Callable[[PreparedRequest], RouteResp]
 
 
 class BaseBackend:
 
-    # The backend service name.
-    # This is how a backend is identified; for instance, in config.
+    # [Required Class Attribute] The name of the service implemented by this backend.
     # e.g., "flows"
     service_name: str = "_base"
 
-    # A url prefix for all registered routes
+    # [Required Class Attribute] The url prefix; prepended to any route registrations.
     # e.g., "https://flows.automate.globus.org/"
     base_url: str = "_base"
 
@@ -41,89 +31,35 @@ class BaseBackend:
                 msg = f"Missing required class attribute: `{attr}` in {type(self)}"
                 raise NotImplementedError(msg)
 
-        for route in self.http_routes():
-            route.bind(self)
-
-    def http_routes(self) -> t.Iterator[HttpRoute]:
+    @property
+    def api_handlers(self) -> t.Iterator[AnnotatedHandler]:
         for attr in dir(self):
             item = getattr(self, attr)
-            if isinstance(item, HttpRoute):
+            meta = getattr(item, "meta", None)
+            if isinstance(meta, RouteMetadata):
                 yield item
+
+        # Default fallback route for unimplemented service routes.
+        # Responses prefers earlier-registered routes; so this must be added last.
+        # TODO - is this possible?
+        #  We'll probably need to use a custom registry if we want fallback responses (maybe just moto's?)
+        #  https://github.com/getmoto/moto/blob/master/moto/core/responses_custom_registry.py
+        # yield _NOT_IMPLEMENTED_ROUTE
+
 
     def close(self) -> None:
         pass
 
 
-def http_route(
-    path: str, methods: t.Sequence[str]
-) -> t.Callable[[RouteHandler], HttpRoute]:
+_ALL_METHODS = (
+    "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT"
+)
+
+
+@api_route(re.compile(".*"), _ALL_METHODS)
+def _NOT_IMPLEMENTED_ROUTE() -> RouteResp:
     """
-    Decorator to define an HTTP route on a backend service.
+    A standard route registered on every backend.
+    Gives control over the default "unimplemented" response structure.
     """
-
-    def decorator(handler: RouteHandler) -> HttpRoute:
-        route = HttpRoute(path, list(methods), handler)
-        functools.wraps(handler)(route)
-
-        return route
-
-    return decorator
-
-
-
-class HttpRoute:
-    """
-    Callable object wrapping an route handler with metadata about the route.
-
-    If the route wraps an instance method, the instance should be bound to the route
-    using the `bind` method.
-    """
-
-    def __init__(self, path: str, methods: t.List[str], handler: RouteHandler) -> None:
-        self.path = path
-        self.methods = methods
-        self._handler = handler
-
-        self._path_params = re.findall(r"{([^/]+)}", path)
-        self._path_patt_str = path.replace("{", "(?P<").replace("}", ">[^/]+)")
-        self._path_patt = re.compile(self._path_patt_str) if self._path_params else None
-
-        self._instance: object | None = None
-
-
-    def __call__(self, request: PreparedRequest) -> RouteResp:
-        event: t.Dict[str, t.Any] = self._extract_path_params(request)
-        if "request" in inspect.signature(self._handler).parameters:
-            event["request"] = request
-
-        if self._instance:
-            return self._handler(self._instance, **event)
-        else:
-            return self._handler(**event)
-
-    def bind(self, instance: object) -> None:
-        """
-        Bind a route handler to an instance to support Routes as an instance method.
-        This will be supplied to the `_handler` as a first "self" parameter.
-        """
-        self._instance = instance
-
-    def _extract_path_params(self, request: PreparedRequest) -> t.Dict[str, str]:
-        """
-        Load any path parameters from the request URL.
-        If the route has no path parameters, this will return an empty dict.
-        """
-        if self._path_patt:
-            match = self._path_patt.match(request.path_url)
-            return {param: match.group(param) for param in self._path_params}
-        return {}
-
-    def get_url(self, base_url: str) -> str | re.Pattern:
-        if not self._path_params:
-            return urllib.parse.urljoin(base_url, self.path)
-
-        url = urllib.parse.urljoin(base_url, self._path_patt_str)
-        return re.compile(url)
-
-    def __repr__(self):
-        return f"<HttpRoute {self.methods} {self.path}>"
+    return 501, {}, json.dumps({"Error": "Not Implemented"})

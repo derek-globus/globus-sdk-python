@@ -6,7 +6,7 @@ import json
 import typing as t
 
 
-from globus_sdk.experimental.glocal.core import BaseBackend, http_route
+from globus_sdk.experimental.glocal.core import BaseBackend, api_route
 from .data import Flow
 
 if t.TYPE_CHECKING:
@@ -23,7 +23,7 @@ class FlowsBackend(BaseBackend):
         super().__init__()
         self._flows: dict[str, Flow] = {}
 
-    @http_route("/flows", methods=["POST"])
+    @api_route("/flows", methods=["POST"])
     def create_flow(self, request: PreparedRequest) -> RouteResp:
         request_json = json.loads(request.body)
         flow = Flow(
@@ -39,13 +39,13 @@ class FlowsBackend(BaseBackend):
         return 201, {}, json.dumps(response)
 
 
-    @http_route("/flows", methods=["GET"])
+    @api_route("/flows", methods=["GET"])
     def list_flows(self) -> RouteResp:
         flows = [dataclasses.asdict(flow) for flow in self._flows.values()]
         return 200, {}, json.dumps({"flows": flows})
 
 
-    @http_route("/flows/{flow_id}", methods=["GET"])
+    @api_route("/flows/{flow_id}", methods=["GET"])
     def get_flow(self, flow_id: str) -> RouteResp:
         flow = self._flows.get(flow_id)
         if not flow:
@@ -54,7 +54,7 @@ class FlowsBackend(BaseBackend):
         return 200, {}, json.dumps(response)
 
 
-    @http_route("/flows/{flow_id}", methods=["PUT"])
+    @api_route("/flows/{flow_id}", methods=["PUT"])
     def update_flow(self, request: PreparedRequest, flow_id: str) -> RouteResp:
         if flow_id not in self._flows:
             return 404, {}, json.dumps({"error": "Flow not found"})
@@ -66,7 +66,7 @@ class FlowsBackend(BaseBackend):
         return 200, {}, json.dumps(dataclasses.asdict(updated_flow))
 
 
-    @http_route("/flows/{flow_id}", methods=["DELETE"])
+    @api_route("/flows/{flow_id}", methods=["DELETE"])
     def delete_flow(self, flow_id: str) -> RouteResp:
         if flow_id in self._flows:
             del self._flows[flow_id]
